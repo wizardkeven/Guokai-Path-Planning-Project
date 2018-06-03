@@ -9,6 +9,9 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include <map>
+#include <iterator>
+#include "vehicle.h"
 
 using namespace std;
 
@@ -169,6 +172,16 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
   //reference velocity to target
   double ref_vel = 0.0; //mph
+  const int LANE_WIDTH = 4;
+  const double SPEED_LIMIT = 49.5;
+  const int num_lanes = 3;
+  const double goal_s = 1000000; //m
+  const int goal_lane = 3;
+  const double MAX_ACCEL = .224;
+
+  //ego vehicle
+  Vehicle ego;
+
 
 int main() {
   uWS::Hub h;
@@ -184,6 +197,12 @@ int main() {
   string map_file_ = "../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
+
+  //ego vehicle
+  ego = Vehicle(1, 0.0, 0.0, 0.0);
+  vector<double> ego_config = {SPEED_LIMIT,num_lanes,goal_s,goal_lane,MAX_ACCEL};
+  ego.configure(ego_config);
+  ego.state = "KL";
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
@@ -254,43 +273,87 @@ int main() {
 
             bool too_close = false;
 
+            //update ego vehicle info
+            int ego_lane = car_d/LANE_WIDTH;
+            ego.lane = ego_lane;
+            ego.s = car_s;
+            ego.v = sqrt(car_speed);
+
+            //all vehicles from sensor fusion data
+            map<int, Vehicle> vehicles;
+
             //find ref_v to use
+            //generate trajectory from sensor fusion data
             for(int i=0; i< sensor_fusion.size();i++)
             {
               //car is in my lane
-              float d = sensor_fusion[i][6];
-              if(d < (2+4*lane+2) && d > (2+4*lane - 2))
-              {
-                double vx = sensor_fusion[i][3];
-                double vy = sensor_fusion[i][4];
-                double check_speed = sqrt(vx*vx + vy*vy);
-                double check_car_s = sensor_fusion[i][5];
+              double id = sensor_fusion[i][0];
+              // double x = sensor_fusion[i][1];
+              // double y = sensor_fusion[i][2];
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double lane_speed = sqrt(vx*vx + vy*vy);
 
-                check_car_s += ((double)prev_size*.02*check_speed);
-                //check s values greater than mine and s gap
-                if((check_car_s > car_s) && ((check_car_s - car_s) < 30))
-                {
-                  //do some logic here , lower reference velocity so we dont crash into the cat in front of un
-                  //could also flag to try to change lanes
-                  // ref_vel = 29.5; // mph
-                  too_close = true;
-                  if(lane > 0)
-                  {
-                    lane = 0;
-                  }
-                }
-              }
+              double s = sensor_fusion[i][5];
+              double d = sensor_fusion[i][6];
+
+              int l = d/LANE_WIDTH;
+
+              Vehicle vehicle = Vehicle(l,s,lane_speed,0);
+              vehicle.state = "CS";
+              vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
+
+              // float d = sensor_fusion[i][6];
+              // if(d < (2+4*lane+2) && d > (2+4*lane - 2))
+              // {
+              //   double vx = sensor_fusion[i][3];
+              //   double vy = sensor_fusion[i][4];
+              //   double check_speed = sqrt(vx*vx + vy*vy);
+              //   double check_car_s = sensor_fusion[i][5];
+
+              //   check_car_s += ((double)prev_size*.02*check_speed);
+              //   //check s values greater than mine and s gap
+              //   if((check_car_s > car_s) && ((check_car_s - car_s) < 30))
+              //   {
+              //     //do some logic here , lower reference velocity so we dont crash into the cat in front of un
+              //     //could also flag to try to change lanes
+              //     // ref_vel = 29.5; // mph
+              //     too_close = true;
+              //     if(lane > 0)
+              //     {
+              //       lane = 0;
+              //     }
+              //   }
+              // }
             }
 
+            //generate predictions
+            //TODO
+            map<int ,vector<Vehicle> > predictions;
 
-            if(too_close)
+            map<int, Vehicle>::iterator it = vehicles.begin();
+            while(it != vehicles.end())
             {
-              ref_vel -= .224;
+                int v_id = it->first;
+                vector<Vehicle> preds = it->second.generate_predictions(.5);
+                predictions[v_id] = preds;
+                it++;
             }
-            else if(ref_vel < 49.5)
-            {
-              ref_vel += .224;
-            }
+            //Generate trajectory based on predictions
+            ego.horizon = .5;
+            vector<Vehicle> trajectory = ego.choose_next_state(predictions);
+            // ego.realize_next_state(trajectory);
+
+            ref_vel = ego.v;
+
+            // if(too_close)
+            // {
+            //   ref_vel -= .224;
+            // }
+            // else if(ref_vel < 49.5)
+            // {
+            //   ref_vel += .224;
+            // }
 
             vector<double> ptsx;
             vector<double> ptsy;
@@ -330,22 +393,34 @@ int main() {
 
               ptsy.push_back(ref_y_prev);
               ptsy.push_back(ref_y);
-
               
             }
 
+            double next_s = car_s;
+            double next_lane = lane;
+            if(trajectory.size() > 0)
+            {
+              Vehicle horizon_vehicle = trajectory[1];
+              next_s = horizon_vehicle.s;
+              next_lane = horizon_vehicle.lane;
+              vector<double> next_wp = getXY(horizon_vehicle.s,(2+4*horizon_vehicle.lane),map_waypoints_s,map_waypoints_x,map_waypoints_y); 
+              ptsx.push_back(next_wp[0]);
+              ptsy.push_back(next_wp[1]); 
+            }
+
             //In Frenet add evenly 30m spaced points ahead of the starting reference
-            vector<double> next_wp0 = getXY(car_s+30,(2+4*lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
-            vector<double> next_wp1 = getXY(car_s+60,(2+4*lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
-            vector<double> next_wp2 = getXY(car_s+90,(2+4*lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            vector<double> next_wp0 = getXY(next_s+30,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            vector<double> next_wp1 = getXY(next_s+60,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            // vector<double> next_wp2 = getXY(next_s+90,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
 
             ptsx.push_back(next_wp0[0]);
             ptsx.push_back(next_wp1[0]);
-            ptsx.push_back(next_wp2[0]);
+            // ptsx.push_back(next_wp2[0]);
 
             ptsy.push_back(next_wp0[1]);
             ptsy.push_back(next_wp1[1]);
-            ptsy.push_back(next_wp2[1]);
+            // ptsy.push_back(next_wp2[1]);
+          
 
             for(int i=0; i< ptsx.size(); i++)
             {
