@@ -44,7 +44,9 @@ public:
 
   string state;
 
-  float horizon;
+  double horizon;
+
+  double maneuver_t = .02;
 
   /**
   * Constructor
@@ -63,7 +65,7 @@ public:
 
   vector<Vehicle> generate_trajectory(string state, map<int, vector<Vehicle>> predictions);
 
-  vector<double> get_kinematics(map<int, vector<Vehicle>> predictions, int lane);
+  vector<double> get_kinematics(map<int, vector<Vehicle>> predictions, int lane, int n_wp);
 
   vector<Vehicle> constant_speed_trajectory();
 
@@ -77,9 +79,9 @@ public:
 
   double position_at(double t);
 
-  bool get_vehicle_behind(map<int, vector<Vehicle>> predictions, int lane, Vehicle & rVehicle);
+  bool get_vehicle_behind(map<int, vector<Vehicle>> predictions, int lane, Vehicle & rVehicle, int n_wp);
 
-  bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle & rVehicle);
+  bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle & rVehicle, int n_wp);
 
   vector<Vehicle> generate_predictions(float horizon);
 

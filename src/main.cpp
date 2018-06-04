@@ -371,10 +371,10 @@ int main() {
               double pre_car_y = car_y - sin(car_yaw);
 
               ptsx.push_back(pre_car_x);
-              ptsx.push_back(car_x);
+              // ptsx.push_back(car_x);
 
               ptsy.push_back(pre_car_y);
-              ptsy.push_back(car_y);
+              // ptsy.push_back(car_y);
             }//use previous path's end points as starting reference
             else
             {
@@ -389,10 +389,10 @@ int main() {
 
               //Use the two points that make the path tangent to the previous path's end point
               ptsx.push_back(ref_x_prev);
-              ptsx.push_back(ref_x);
+              // ptsx.push_back(ref_x);
 
               ptsy.push_back(ref_y_prev);
-              ptsy.push_back(ref_y);
+              // ptsy.push_back(ref_y);
               
             }
 
