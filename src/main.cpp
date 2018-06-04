@@ -172,11 +172,12 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
   //reference velocity to target
   double ref_vel = 0.0; //mph
+  double ref_horizon = .06;//for three time slots
   const int LANE_WIDTH = 4;
   const double SPEED_LIMIT = 49.5;
-  const int num_lanes = 3;
+  const double num_lanes = 3;
   const double goal_s = 1000000; //m
-  const int goal_lane = 3;
+  const double goal_lane = 3;
   const double MAX_ACCEL = .224;
 
   //ego vehicle
@@ -271,7 +272,7 @@ int main() {
               car_s = end_path_s;
             }
 
-            bool too_close = false;
+            // bool too_close = false;
 
             //update ego vehicle info
             int ego_lane = car_d/LANE_WIDTH;
@@ -284,6 +285,7 @@ int main() {
 
             //find ref_v to use
             //generate trajectory from sensor fusion data
+            cout<<"/ndebug sensor fusion data!\n\n";
             for(int i=0; i< sensor_fusion.size();i++)
             {
               //car is in my lane
@@ -302,6 +304,8 @@ int main() {
               Vehicle vehicle = Vehicle(l,s,lane_speed,0);
               vehicle.state = "CS";
               vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
+
+              cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tlane_speed: "<<lane_speed<<"\n";
 
               // float d = sensor_fusion[i][6];
               // if(d < (2+4*lane+2) && d > (2+4*lane - 2))
@@ -326,7 +330,7 @@ int main() {
               //   }
               // }
             }
-
+            cout<<"\n";
             //generate predictions
             //TODO
             map<int ,vector<Vehicle> > predictions;
@@ -335,12 +339,23 @@ int main() {
             while(it != vehicles.end())
             {
                 int v_id = it->first;
-                vector<Vehicle> preds = it->second.generate_predictions(.5);
+                vector<Vehicle> preds = it->second.generate_predictions(ref_horizon);
                 predictions[v_id] = preds;
                 it++;
             }
+            cout<<"\ndebug predictions!\n";
+            for(map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); it++)
+            {
+              vector<Vehicle> m_vehicles = it->second;
+              cout<<"id: "<<it->first<<"\tsize: "<< m_vehicles.size();
+              for(int i=0; i< m_vehicles.size(); i++)
+              {
+                cout<<"\ns ==> "<<m_vehicles[i].s<<"\tlane: "<<m_vehicles[i].lane<<"\nv: "<<m_vehicles[i].v;
+              }
+              cout<<"\n\n";
+            }
             //Generate trajectory based on predictions
-            ego.horizon = .5;
+            ego.horizon = ref_horizon;
             vector<Vehicle> trajectory = ego.choose_next_state(predictions);
             // ego.realize_next_state(trajectory);
 
