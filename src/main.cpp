@@ -172,7 +172,7 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
   //reference velocity to target
   double ref_vel = 0.0; //mph
-  double ref_horizon = .06;//for three time slots
+  double ref_horizon = 1.0;//for three time slots
   const int LANE_WIDTH = 4;
   const double SPEED_LIMIT = 49.5;
   const double num_lanes = 3;
@@ -272,6 +272,9 @@ int main() {
               car_s = end_path_s;
             }
 
+            cout<<"\nVehicle starting position:\n";
+            cout<<"car_x: "<<car_x<<"\tcar_y: "<<car_y<<"\tcar_s: "<<car_s<<"\tcar_d: "<<car_d<<"\tcar_yaw: "<<car_yaw<<"\tcar_speed: "<<car_speed<<"\n";
+
             // bool too_close = false;
 
             //update ego vehicle info
@@ -288,6 +291,11 @@ int main() {
             cout<<"/ndebug sensor fusion data!\n\n";
             for(int i=0; i< sensor_fusion.size();i++)
             {
+              double d = sensor_fusion[i][6];
+              if(d < 0.0)
+              {
+                continue;
+              }
               //car is in my lane
               double id = sensor_fusion[i][0];
               // double x = sensor_fusion[i][1];
@@ -297,7 +305,6 @@ int main() {
               double lane_speed = sqrt(vx*vx + vy*vy);
 
               double s = sensor_fusion[i][5];
-              double d = sensor_fusion[i][6];
 
               int l = d/LANE_WIDTH;
 
@@ -359,7 +366,7 @@ int main() {
             vector<Vehicle> trajectory = ego.choose_next_state(predictions);
             // ego.realize_next_state(trajectory);
 
-            ref_vel = ego.v;
+            ref_vel = ego.v * 2.24;
 
             // if(too_close)
             // {
