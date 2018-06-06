@@ -13,15 +13,13 @@
 
 Vehicle::Vehicle(){}
 
-Vehicle::Vehicle(int lane, double s, double v, double a, string state) {
+Vehicle::Vehicle(int lane, double s, double v, double a, STATE state) {
 
     this->lane = lane;
     this->s = s;
     this->v = v;
     this->a = a;
     this->state = state;
-    max_acceleration = -1;
-
 }
 
 Vehicle::~Vehicle() {}
@@ -50,28 +48,28 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> predictions
     */
     
     //TODO: Your solution here.
-    map<string, float> costs;
-    vector<string> possible_successor_states = successor_states();
-    map<string, vector<Vehicle>> next_states;
+    map<STATE, float> costs;
+    vector<STATE> possible_successor_states = successor_states();
+    map<STATE, vector<Vehicle>> next_states;
     for(int i = 0; i < possible_successor_states.size(); i++)
     {
-        string possible_successor_state = possible_successor_states[i];
+        STATE possible_successor_state = possible_successor_states[i];
         vector<Vehicle> trajectory_for_state = generate_trajectory(possible_successor_states[i], predictions);
-        next_states.insert(pair<string, vector<Vehicle>>(possible_successor_state,trajectory_for_state));
+        next_states.insert(pair<STATE, vector<Vehicle>>(possible_successor_state,trajectory_for_state));
         float cost_for_state = 0.0;
         if(trajectory_for_state.size() > 0)
         {
             cost_for_state = calculate_cost(*this, predictions, trajectory_for_state);
         }
-        costs.insert(pair<string, float>(possible_successor_state , cost_for_state));
+        costs.insert(pair<STATE, float>(possible_successor_state , cost_for_state));
         
     }
     
     vector<Vehicle> best_next_state;
     float min_cost = 9999999;
-    for(map<string, vector<Vehicle>>::iterator it = next_states.begin(); it != next_states.end(); ++it) 
+    for(map<STATE, vector<Vehicle>>::iterator it = next_states.begin(); it != next_states.end(); ++it) 
     {
-        string state = it->first;
+        STATE state = it->first;
         float cost = costs.at(state);
         if(cost < min_cost)
         {
@@ -83,15 +81,15 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> predictions
     return best_next_state;
 }
 
-vector<string> Vehicle::successor_states() {
+vector<STATE> Vehicle::successor_states() {
     /*
     Provides the possible next states given the current state for the FSM 
     discussed in the course, with the exception that lane changes happen 
     instantaneously, so LCL and LCR can only transition back to KL.
     */
-    vector<string> states;
+    vector<STATE> states;
     states.push_back(KL);
-    string state = this->state;
+    STATE state = this->state;
     if(state.compare(KL) == 0) {
         states.push_back(PLCL);
         states.push_back(PLCR);
@@ -110,7 +108,7 @@ vector<string> Vehicle::successor_states() {
     return states;
 }
 
-vector<Vehicle> Vehicle::generate_trajectory(string state, map<int, vector<Vehicle>> predictions) {
+vector<Vehicle> Vehicle::generate_trajectory(STATE state, map<int, vector<Vehicle>> predictions) {
     /*
     Given a possible next state, generate the appropriate trajectory to realize the next state.
     */
@@ -337,7 +335,7 @@ bool Vehicle::get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane,
     return found_vehicle;
 }
 
-vector<Vehicle> Vehicle::generate_predictions(double horizon) {
+vector<Vehicle> Vehicle::generate_predictions() {
     /*
     Generates predictions for non-ego vehicles to be used
     in trajectory generation for the ego vehicle.
@@ -346,7 +344,7 @@ vector<Vehicle> Vehicle::generate_predictions(double horizon) {
     double current_v = this->v;
     double delta_t = DT;
 
-    for(double i = delta_t; i < horizon; i+= delta_t) {
+    for(double i = delta_t; i < HORIZON; i+= delta_t) {
       double next_s = position_at(i);
       double next_v = current_v;
       if (i < horizon - delta_t) {

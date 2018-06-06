@@ -18,7 +18,7 @@ float goal_distance_cost(const Vehicle & vehicle, const vector<Vehicle> & trajec
     float cost;
     float distance = data["distance_to_goal"];
     if (distance > 0) {
-        cost = 1 - 2*exp(-(abs(2.0*vehicle.goal_lane - data["intended_lane"] - data["final_lane"]) / distance));
+        cost = 1 - 2*exp(-(abs(2.0*GOAL_LANE - data["intended_lane"] - data["final_lane"]) / distance));
     } else {
         cost = 1;
     }
@@ -95,15 +95,15 @@ map<string, float> get_helper_data(const Vehicle & vehicle, const vector<Vehicle
     Vehicle trajectory_last = trajectory[1];
     float intended_lane;
 
-    if (trajectory_last.state.compare("PLCL") == 0) {
+    if (trajectory_last.state == PLCL) {
         intended_lane = trajectory_last.lane + 1;
-    } else if (trajectory_last.state.compare("PLCR") == 0) {
+    } else if (trajectory_last.state == PLCR) {
         intended_lane = trajectory_last.lane - 1;
     } else {
         intended_lane = trajectory_last.lane;
     }
 
-    float distance_to_goal = vehicle.goal_s - trajectory_last.s;
+    float distance_to_goal = GOAL_LANE - trajectory_last.s;
     float final_lane = trajectory_last.lane;
     trajectory_data["intended_lane"] = intended_lane;
     trajectory_data["final_lane"] = final_lane;

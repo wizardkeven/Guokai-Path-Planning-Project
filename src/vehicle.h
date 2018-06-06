@@ -5,24 +5,20 @@
 #include <vector>
 #include <map>
 #include <string>
+#include "constant.h"
 
 using namespace std;
 
 class Vehicle {
 public:
 
-  map<string, int> lane_direction = {{"PLCL", -1}, {"LCL", -1}, {"LCR", 1}, {"PLCR", 1}};
-
+  map<STATE, int> LANE_DIRECTION = {{PLCL, -1}, {LCL, -1}, {LCR, 1}, {PLCR, 1}};
   struct collider{
 
     bool collision ; // is there a collision?
     double  time; // time collision happens
 
   };
-
-  int L = 1;
-
-  int preferred_buffer = 6; // impacts "keep lane" behavior.
 
   int lane;
 
@@ -34,25 +30,14 @@ public:
 
   double target_speed;
 
-  int lanes_available;
+  STATE state;
 
-  double max_acceleration;
-
-  int goal_lane = 2; //drive in rightest lane if no need to pass cars
-
-  int goal_s;
-
-  string state;
-
-  double horizon;
-
-  double maneuver_t = .02;
 
   /**
   * Constructor
   */
   Vehicle();
-  Vehicle(int lane, double s, double v, double a, string state="CS");
+  Vehicle(int lane, double s, double v, double a, STATE state= CS);
 
   /**
   * Destructor
@@ -63,7 +48,7 @@ public:
 
   vector<string> successor_states();
 
-  vector<Vehicle> generate_trajectory(string state, map<int, vector<Vehicle>> predictions);
+  vector<Vehicle> generate_trajectory(STATE state, map<int, vector<Vehicle>> predictions);
 
   vector<double> get_kinematics(map<int, vector<Vehicle>> predictions, int lane, int n_wp);
 
@@ -71,11 +56,9 @@ public:
 
   vector<Vehicle> keep_lane_trajectory(map<int, vector<Vehicle>> predictions);
 
-  vector<Vehicle> lane_change_trajectory(string state, map<int, vector<Vehicle>> predictions);
+  vector<Vehicle> lane_change_trajectory(STATE state, map<int, vector<Vehicle>> predictions);
 
-  vector<Vehicle> prep_lane_change_trajectory(string state, map<int, vector<Vehicle>> predictions);
-
-  void increment(double dt);
+  vector<Vehicle> prep_lane_change_trajectory(STATE state, map<int, vector<Vehicle>> predictions);
 
   double position_at(double t);
 
@@ -83,11 +66,7 @@ public:
 
   bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle & rVehicle, int n_wp);
 
-  vector<Vehicle> generate_predictions(double horizon);
-
-  void realize_next_state(vector<Vehicle> trajectory);
-
-  void configure(vector<double> road_data);
+  vector<Vehicle> generate_predictions();
 
 };
 
