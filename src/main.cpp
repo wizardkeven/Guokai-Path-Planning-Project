@@ -5,6 +5,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <string>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
@@ -23,6 +24,10 @@ using json = nlohmann::json;
 //ego vehicle
 Vehicle ego;
 
+//reference velocity to target
+double ref_vel = 0.0; //mph 
+double ref_a = 0.0;//mps2
+
 int main() {
   uWS::Hub h;
 
@@ -36,8 +41,9 @@ int main() {
   //ego vehicle
   ego = Vehicle(1, 0.0, 0.0, 0.0);
   ego.state = KL;
-
-  ifstream in_map_(map_file_.c_str(), ifstream::in);
+  // Waypoint map to read from
+  string map_file_ = "../data/highway_map.csv";
+  ifstream in_map_ (map_file_.c_str(), ifstream::in );
 
   string line;
   while (getline(in_map_, line)) {
@@ -144,7 +150,7 @@ int main() {
               double lane_speed = sqrt(vx*vx + vy*vy);
 
               Vehicle vehicle = Vehicle(l,s,lane_speed,0);
-              vehicle.state = "CS";
+              vehicle.state = CS;
               vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
 
               cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tlane_speed: "<<lane_speed<<"\n";
@@ -182,7 +188,7 @@ int main() {
             while(it != vehicles.end())
             {
                 int v_id = it->first;
-                vector<Vehicle> preds = it->second.generate_predictions(ref_horizon);
+                vector<Vehicle> preds = it->second.generate_predictions();
                 predictions[v_id] = preds;
                 it++;
             }
@@ -198,11 +204,11 @@ int main() {
               cout<<"\n\n";
             }
             //Generate trajectory based on predictions
-            ego.horizon = ref_horizon;
-            vector<Vehicle> trajectory = ego.choose_next_state(predictions);
+            vector<vector<double>> trajectory = ego.choose_next_state(predictions);
             // ego.realize_next_state(trajectory);
 
-            ref_vel = ego.v * 2.24;
+            ref_vel = ego.v;
+            ref_a = ego.a;
 
             // if(too_close)
             // {
@@ -255,13 +261,15 @@ int main() {
             }
 
             double next_s = car_s;
-            double next_lane = lane;
-            if(trajectory.size() > 0)
+            double next_lane = ego.lane;
+            //get target point after horizon time period
+            for(int i = 0; i< trajectory.size(); i++)
             {
-              Vehicle horizon_vehicle = trajectory[1];
-              next_s = horizon_vehicle.s;
-              next_lane = horizon_vehicle.lane;
-              vector<double> next_wp = getXY(horizon_vehicle.s,(2+4*horizon_vehicle.lane),map_waypoints_s,map_waypoints_x,map_waypoints_y); 
+              vector<double> next_wp = trajectory[i];
+              assert(next_wp.size() == 2);
+              next_s = next_wp[0];
+              next_lane = next_wp[1];
+              vector<double> next_wp = getXY(next_s,(2 + 4 * next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y); 
               ptsx.push_back(next_wp[0]);
               ptsy.push_back(next_wp[1]); 
             }

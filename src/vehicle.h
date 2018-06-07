@@ -4,7 +4,6 @@
 #include <random>
 #include <vector>
 #include <map>
-#include <string>
 #include "constant.h"
 
 using namespace std;
@@ -17,8 +16,9 @@ public:
 
     bool collision ; // is there a collision?
     double  time; // time collision happens
+    collider(bool m_collision = false, double m_time = SCLT):collision(m_collision), time(m_time){};
 
-  };
+  } collider;
 
   int lane;
 
@@ -37,16 +37,16 @@ public:
   * Constructor
   */
   Vehicle();
-  Vehicle(int lane, double s, double v, double a, STATE state= CS);
+  Vehicle(int lane, double s, double v, double a, STATE state = CS);
 
   /**
   * Destructor
   */
   virtual ~Vehicle();
 
-  vector<Vehicle> choose_next_state(map<int, vector<Vehicle>> predictions);
+  vector<vector<double>> choose_next_state(map<int, vector<Vehicle>> predictions);
 
-  vector<string> successor_states();
+  vector<STATE> successor_states();
 
   vector<Vehicle> generate_trajectory(STATE state, map<int, vector<Vehicle>> predictions);
 

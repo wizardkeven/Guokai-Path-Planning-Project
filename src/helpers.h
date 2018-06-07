@@ -1,11 +1,9 @@
-#ifdefine HELPERS_H
-#define HELPERS_H
-
 #include <math.h>
 #include <map>
 #include <vector>
+#include <string>
 #include "constant.h"
-#include "Vehicle.h"
+#include "vehicle.h"
 
 using namespace std;
 
@@ -174,5 +172,3 @@ double mps2mph(double mps)
 {
 	return mps * MPS2MPH;
 }
-
-#endif
