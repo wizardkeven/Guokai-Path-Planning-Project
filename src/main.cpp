@@ -39,8 +39,8 @@ int main() {
   vector<double> map_waypoints_dy;
 
   //ego vehicle
-  ego = Vehicle(1, 0.0, 0.0, 0.0);
-  ego.state = KL;
+  ego = Vehicle(0, 1, 0.0, 0.0, ref_vel, ref_a);
+
   // Waypoint map to read from
   string map_file_ = "../data/highway_map.csv";
   ifstream in_map_ (map_file_.c_str(), ifstream::in );
@@ -116,82 +116,83 @@ int main() {
             // bool too_close = false;
 
             //update ego vehicle info
-            ego.lane = get_lane(car_d);
+            ego.l = get_lane(car_d);
             ego.s = car_s;
-            ego.v = car_speed;
+            ego.d = car_d;
+            ego.v = mph2mps(car_speed);
 
-            //6 nearest vehicles from sensor fusion data, 2 for each lane
-            map<int, Vehicle> vehicles;
+            //get vehicles from sensor fusion data within FOV
+            map<int, Vehicle> vehicles = get_vehicle_in_FOV(sensor_fusion,ego);
 
             //find ref_v to use
             //generate trajectory from sensor fusion data
-            cout<<"/ndebug sensor fusion data!\n\n";
+            // cout<<"/ndebug sensor fusion data!\n\n";
 
-            for(int i=0; i< sensor_fusion.size();i++)
-            {
-              double s = sensor_fusion[i][5]; 
-              // only use vehicles within FOV: 50m
-              if(fabs(s) > FOV)
-              {
-                continue;
-              }
-              double d = sensor_fusion[i][6];
-              int l = get_lane(d);
-              if( l > 2 || l < 0)
-              {
-                continue;
-              }
-              //car is in my lane
-              double id = sensor_fusion[i][0];
-              // double x = sensor_fusion[i][1];
-              // double y = sensor_fusion[i][2];
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double lane_speed = sqrt(vx*vx + vy*vy);
+            // for(int i=0; i< sensor_fusion.size();i++)
+            // {
+            //   double s = sensor_fusion[i][5]; 
+            //   // only use vehicles within FOV: 50m
+            //   if(fabs(s) > FOV)
+            //   {
+            //     continue;
+            //   }
+            //   double d = sensor_fusion[i][6];
+            //   int l = get_lane(d);
+            //   if( l > 2 || l < 0)
+            //   {
+            //     continue;
+            //   }
+            //   //car is in my lane
+            //   double id = sensor_fusion[i][0];
+            //   // double x = sensor_fusion[i][1];
+            //   // double y = sensor_fusion[i][2];
+            //   double vx = sensor_fusion[i][3];
+            //   double vy = sensor_fusion[i][4];
+            //   double lane_speed = sqrt(vx*vx + vy*vy);
 
-              Vehicle vehicle = Vehicle(l,s,lane_speed,0);
-              vehicle.state = CS;
-              vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
+            //   Vehicle vehicle = Vehicle(l,s,lane_speed,0);
+            //   vehicle.state = CS;
+            //   vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
 
-              cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tlane_speed: "<<lane_speed<<"\n";
+            //   cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tlane_speed: "<<lane_speed<<"\n";
 
-              // float d = sensor_fusion[i][6];
-              // if(d < (2+4*lane+2) && d > (2+4*lane - 2))
-              // {
-              //   double vx = sensor_fusion[i][3];
-              //   double vy = sensor_fusion[i][4];
-              //   double check_speed = sqrt(vx*vx + vy*vy);
-              //   double check_car_s = sensor_fusion[i][5];
+            //   // float d = sensor_fusion[i][6];
+            //   // if(d < (2+4*lane+2) && d > (2+4*lane - 2))
+            //   // {
+            //   //   double vx = sensor_fusion[i][3];
+            //   //   double vy = sensor_fusion[i][4];
+            //   //   double check_speed = sqrt(vx*vx + vy*vy);
+            //   //   double check_car_s = sensor_fusion[i][5];
 
-              //   check_car_s += ((double)prev_size*.02*check_speed);
-              //   //check s values greater than mine and s gap
-              //   if((check_car_s > car_s) && ((check_car_s - car_s) < 30))
-              //   {
-              //     //do some logic here , lower reference velocity so we dont crash into the cat in front of un
-              //     //could also flag to try to change lanes
-              //     // ref_vel = 29.5; // mph
-              //     too_close = true;
-              //     if(lane > 0)
-              //     {
-              //       lane = 0;
-              //     }
-              //   }
-              // }
-            }
-            cout<<"\n";
+            //   //   check_car_s += ((double)prev_size*.02*check_speed);
+            //   //   //check s values greater than mine and s gap
+            //   //   if((check_car_s > car_s) && ((check_car_s - car_s) < 30))
+            //   //   {
+            //   //     //do some logic here , lower reference velocity so we dont crash into the cat in front of un
+            //   //     //could also flag to try to change lanes
+            //   //     // ref_vel = 29.5; // mph
+            //   //     too_close = true;
+            //   //     if(lane > 0)
+            //   //     {
+            //   //       lane = 0;
+            //   //     }
+            //   //   }
+            //   // }
+            // }
+            // cout<<"\n";
 
             //generate predictions
             //TODO
-            map<int ,vector<Vehicle> > predictions;
+            map<int ,vector<Vehicle> > predictions = predict(vehicles, ego);
 
-            map<int, Vehicle>::iterator it = vehicles.begin();
-            while(it != vehicles.end())
-            {
-                int v_id = it->first;
-                vector<Vehicle> preds = it->second.generate_predictions();
-                predictions[v_id] = preds;
-                it++;
-            }
+            // map<int, Vehicle>::iterator it = vehicles.begin();
+            // while(it != vehicles.end())
+            // {
+            //     int v_id = it->first;
+            //     vector<Vehicle> preds = it->second.generate_predictions();
+            //     predictions[v_id] = preds;
+            //     it++;
+            // }
             cout<<"\ndebug predictions!\n";
             for(map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); it++)
             {
@@ -204,8 +205,9 @@ int main() {
               cout<<"\n\n";
             }
             //Generate trajectory based on predictions
-            vector<vector<double>> trajectory = ego.choose_next_state(predictions);
+            Vehicle target = get_target_vehicle(predictions, &ego);
             // ego.realize_next_state(trajectory);
+            
 
             ref_vel = ego.v;
             ref_a = ego.a;

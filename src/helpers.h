@@ -172,3 +172,214 @@ double mps2mph(double mps)
 {
 	return mps * MPS2MPH;
 }
+
+
+/*
+	Retrieve vehicle from sensor fusion data within FOV.
+*/
+map<int, Vehicle> get_vehicle_in_FOV(vector<double> sensor_fusion, Vehicle ego)
+{
+
+	//vehicles within FOV
+	map<int, Vehicle> vehicles;
+	if(sensor_fusion.size() >= 0)
+	{
+		cout<<"empty sensor fusion data!"<<endl;
+		return vehicles;
+	}
+	//calculate valid s range within FOV with warping of single round of track: 6945.554
+	double ego_s = ego.s;
+	double shift_s = .0; // shift vector: -1 warp backward; 0-> no shift; 1-> warp forward
+
+	if(ego_s + FOV > MAX_S)//warp backward
+	{
+		shift_s = MAX_X - (ego_s + FOV);
+	}
+	else if(ego_s - FOV < 0.0) //warp forward
+	{
+		shift_s = FOV - ego_s;
+	}
+	//end of calculate 
+
+	//shift ego vehicle s
+	double shifted_s = ego_s + shift_s;
+
+	for(int i=0; i< sensor_fusion.size();i++)
+	{
+	  //shift sensor fusion vehicle with shift_s
+	  double s = sensor_fusion[i][5]; 
+	  double s_ = fmod(s + shift_s + MAX_S, MAX_S);
+	  //end of shifting
+
+	  // filter vehicles beyond FOV: 70m
+	  if(fabs(s_ - shifted_s) > FOV)
+	  {
+	    continue;
+	  }
+	  //end of s filtering
+
+	  //filter vehicle out of normal lanes: 0, 1, 2( left -> right)
+	  double d = sensor_fusion[i][6];
+	  int l = get_lane(d);
+	  if( l > 2 || l < 0)
+	  {
+	    continue;
+	  }
+	  //end of lane filtering
+
+	  //retrieve vehicle info
+	  double id = sensor_fusion[i][0];
+	  // double x = sensor_fusion[i][1];
+	  // double y = sensor_fusion[i][2];
+	  double vx = sensor_fusion[i][3];
+	  double vy = sensor_fusion[i][4];
+	  double speed = sqrt(vx*vx + vy*vy);
+
+	  Vehicle vehicle = Vehicle(id, l, s, d, lane_speed, 0, CS);
+	  vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
+
+	  //debug vehicle within FOV
+	  cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tlane_speed: "<<lane_speed<<"\n";
+	}
+	cout<<"\n";
+
+	return vehicles;
+}
+
+
+/* 
+	Get predictions about these vehicles in horizon time span
+*/
+map<int, vector<Vehicle>> predict(map<int, Vehicle> vehicles, Vehicle ego)
+{
+	map<int, vector<Vehicle>> predictions;
+
+	if(vehicles.size()<=0)
+	{
+		cout<<"empty FOV vehicles data!"<<endl;
+		return predictions;
+	}
+
+	//parameters of ego vehicle
+	int m_lane = ego.l;
+	double m_v = ego.v;
+	double m_s = ego.s;
+	double m_d = ego.d;
+
+	//prediction starts
+	for(map<int, Vehicle>:: Iterator it = vehicles.begin(); it != vehicles.end(); it++)
+	{
+		int id_ = it->first;
+		Vehicle vehicle_ = it->second;
+
+		int lane_ = vehicle_.l;
+		double s_ = vehicle_.s;
+		double d_ = vehicle_.d;
+		double v_ = vehicle_.v;
+		STATE state_ = vehicle_.state;
+
+		vector<Vehicle> dt_vehicles;
+
+		Vehicle d0_vehicle = Vehicle(id_, lane_, s_, d_, v_, .0, state_);
+		dt_vehicles.push_back(d0_vehicle);
+
+		for(double dt = .0; dt < horizon; dt+=DT)
+		{
+
+			double new_s = s_ + dt * v_;
+			Vehicle dt_v = Vehicle(id_, lane_, new_s, d_, v_, .0, state_);
+			dt_vehicles.push_back(dt_v);
+		}
+
+		predictions.insert(std::pair<int, vector<Vehicle>>(id_, dt_vehicles));
+	}
+
+	return predictions;
+}
+
+vector<STATE> successor_states(Vehicle & ego) {
+    /*
+    Provides the possible next states given the current state for the FSM 
+    discussed in the course, with the exception that lane changes happen 
+    instantaneously, so LCL and LCR can only transition back to KL.
+    */
+    vector<STATE> states;
+    states.push_back(KL)
+    STATE state = ego->state;
+    int lane = ego->l;
+    if(state == KL) 
+    {
+      states.push_back(PLCL);
+      states.push_back(PLCR);
+    } else if (state == PLCL) {
+      if (lane != 0) {
+          states.push_back(PLCL);
+          states.push_back(LCL);
+      }
+    } else if (state == PLCR) {
+      if (lane != NUM_LANE - 1) {
+          states.push_back(PLCR);
+          states.push_back(LCR);
+      }
+    }
+    //If state is "LCL" or "LCR", then just return "KL"
+    return states;
+}
+
+
+map<STATE, Vehicle> generate_target(vector<STATE> states, map<int ,vector<Vehicle>> predictions, Vehicle &ego)
+{
+	map<STATE, Vehicle> targets;	
+	//get possible target vehicle
+	for(int i=0; i<states.size(); i++)
+	{
+		STATE state = states[i];
+		STATE ego_state = ego->state;
+
+		Vehicle target;
+		switch(ego_state)
+		{
+			case CS:
+							target = constant_trajectory(&ego);
+							break;
+			case KL:
+							target = keep_lane_trajectory(vector<STATE> states, map<int ,vector<Vehicle>> predictions, Vehicle &ego);
+							break;
+			case PLCL:
+							//TODO
+								break;
+			case PLCR:
+								//TODO
+								break;
+			case LCL:
+								//TODO
+								break;
+			case LCR: 
+								//TODO
+								break;
+			default: cout<<"bad state";
+							 break;
+			if(! target)
+			{
+				targets.insert(std::pair<state, target>);
+			}
+		}
+	}
+}
+
+/*
+	get target vehicle at horizon from predicitons
+*/
+Vehicle get_target_vehicle(map<int ,vector<Vehicle>> predictions, Vehicle &ego)
+{
+	//get possible next state list
+	vector<STATE> states = successor_states(&ego);
+
+	//get possible target vechile
+	map<STATE, Vehicle> targets = generate_target(states, predictions, &ego);
+
+	//calculate cost for each state
+	//TODO
+
+	//choose best state
+}

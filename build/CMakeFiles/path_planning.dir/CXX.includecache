@@ -773,8 +773,6 @@ lapacke_mangling.h
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
 
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/constant.h
-string
--
 
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/cost.cpp
 cost.h
@@ -801,10 +799,12 @@ map
 -
 vector
 -
+string
+-
 constant.h
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/constant.h
-Vehicle.h
-/home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/Vehicle.h
+vehicle.h
+/home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/vehicle.h
 
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/json.hpp
 algorithm
@@ -877,6 +877,8 @@ thread
 -
 vector
 -
+string
+-
 Eigen-3.3/Eigen/Core
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/Eigen-3.3/Eigen/Core
 Eigen-3.3/Eigen/QR
@@ -932,8 +934,6 @@ random
 vector
 -
 map
--
-string
 -
 constant.h
 /home/keven/udacity/Term3/Guokai-Path-Planning-Project/src/constant.h
