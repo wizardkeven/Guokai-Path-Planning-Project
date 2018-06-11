@@ -185,7 +185,7 @@ vector<Vehicle> Vehicle::keep_lane_trajectory(map<int, vector<Vehicle>> predicti
     int ctrl_n = HORIZON/DT;
     vector<Vehicle> trajectory = {Vehicle(lane, this->s, this->v, this->a, state)};
 
-    for(int i=1; i<ctrl_n; i++)
+    for(int i=1; i<ctrl_n; i++) 
     {
         vector<double> kinematics = get_kinematics(predictions, this->lane, i);
         float new_s = kinematics[0];
