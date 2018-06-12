@@ -207,7 +207,7 @@ int main() {
             //Generate trajectory based on predictions
             Vehicle target = get_target_vehicle(predictions, &ego);
             // ego.realize_next_state(trajectory);
-            
+
 
             ref_vel = ego.v;
             ref_a = ego.a;

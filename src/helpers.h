@@ -7,6 +7,8 @@
 
 using namespace std;
 
+map<STATE, int> LANE_DIRECTION = {{PLCL, -1}, {LCL, -1}, {LCR, 1}, {PLCR, 1}};
+
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
@@ -161,6 +163,11 @@ int get_lane(double d){
   return d/LANE_WIDTH;
 }
 
+//get d from lane
+double get_d(int lane){
+	return lane*4.+2.;
+}
+
 //convert miles per hour to metres per second
 double mph2mps(double mph)
 {
@@ -177,7 +184,7 @@ double mps2mph(double mps)
 /*
 	Retrieve vehicle from sensor fusion data within FOV.
 */
-map<int, Vehicle> get_vehicle_in_FOV(vector<double> sensor_fusion, Vehicle ego)
+map<int, Vehicle> get_vehicle_in_FOV(vector<vector<double>> sensor_fusion, Vehicle ego)
 {
 
 	//vehicles within FOV
@@ -189,11 +196,11 @@ map<int, Vehicle> get_vehicle_in_FOV(vector<double> sensor_fusion, Vehicle ego)
 	}
 	//calculate valid s range within FOV with warping of single round of track: 6945.554
 	double ego_s = ego.s;
-	double shift_s = .0; // shift vector: -1 warp backward; 0-> no shift; 1-> warp forward
+	double shift_s = .0; // shift vector: -1 warp backward; 0. no shift; 1. warp forward
 
 	if(ego_s + FOV > MAX_S)//warp backward
 	{
-		shift_s = MAX_X - (ego_s + FOV);
+		shift_s = MAX_S - (ego_s + FOV);
 	}
 	else if(ego_s - FOV < 0.0) //warp forward
 	{
@@ -218,7 +225,7 @@ map<int, Vehicle> get_vehicle_in_FOV(vector<double> sensor_fusion, Vehicle ego)
 	  }
 	  //end of s filtering
 
-	  //filter vehicle out of normal lanes: 0, 1, 2( left -> right)
+	  //filter vehicle out of normal lanes: 0, 1, 2( left . right)
 	  double d = sensor_fusion[i][6];
 	  int l = get_lane(d);
 	  if( l > 2 || l < 0)
@@ -235,11 +242,11 @@ map<int, Vehicle> get_vehicle_in_FOV(vector<double> sensor_fusion, Vehicle ego)
 	  double vy = sensor_fusion[i][4];
 	  double speed = sqrt(vx*vx + vy*vy);
 
-	  Vehicle vehicle = Vehicle(id, l, s, d, lane_speed, 0, CS);
+	  Vehicle vehicle = Vehicle(id, l, s, d, speed, 0, CS);
 	  vehicles.insert(std::pair<int,Vehicle>(id,vehicle));
 
 	  //debug vehicle within FOV
-	  cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tlane_speed: "<<lane_speed<<"\n";
+	  cout<<"id: "<<id<<"\ts: "<<s<<"\td: "<<d<<"\tspeed: "<<speed<<"\n";
 	}
 	cout<<"\n";
 
@@ -267,7 +274,7 @@ map<int, vector<Vehicle>> predict(map<int, Vehicle> vehicles, Vehicle ego)
 	double m_d = ego.d;
 
 	//prediction starts
-	for(map<int, Vehicle>:: Iterator it = vehicles.begin(); it != vehicles.end(); it++)
+	for(map<int, Vehicle>:: iterator it = vehicles.begin(); it != vehicles.end(); it++)
 	{
 		int id_ = it->first;
 		Vehicle vehicle_ = it->second;
@@ -283,7 +290,7 @@ map<int, vector<Vehicle>> predict(map<int, Vehicle> vehicles, Vehicle ego)
 		Vehicle d0_vehicle = Vehicle(id_, lane_, s_, d_, v_, .0, state_);
 		dt_vehicles.push_back(d0_vehicle);
 
-		for(double dt = .0; dt < horizon; dt+=DT)
+		for(double dt = .0; dt < HORIZON; dt+=DT)
 		{
 
 			double new_s = fmod(s_ + dt * v_, MAX_S);//calculate s between 0 to MAX_S
@@ -305,8 +312,8 @@ vector<STATE> successor_states(Vehicle & ego) {
     */
     vector<STATE> states;
     states.push_back(KL);
-    STATE state = ego->state;
-    int lane = ego->l;
+    STATE state = ego.state;
+    int lane = ego.l;
     if(state == KL) 
     {
       states.push_back(PLCL);
@@ -326,11 +333,20 @@ vector<STATE> successor_states(Vehicle & ego) {
     return states;
 }
 
-double position_at(double t, Vehicle &m_vehicle) {
-    return m_vehicle->s + mph2mps(m_vehicle->v * t) + m_vehicle->a * t * t/2.0;
+double position_at(double t, Vehicle m_vehicle) {
+    return m_vehicle.s + mph2mps(m_vehicle.v * t) + m_vehicle.a * t * t/2.0;
 }
 
-bool get_vehicle_behind(map<int, vector<Vehicle>> predictions, int lane, Vehicle &ego, Vehicle & rVehicle) {
+Vehicle constant_speed_trajectory(Vehicle ego) {
+    /*
+    Generate a constant speed trajectory.
+    */
+    float next_pos = position_at(HORIZON, ego);
+    Vehicle target = Vehicle(ego.id, ego.l, ego.s, ego.d, ego.v, ego.a, ego.state);
+    return target;
+}
+
+bool get_vehicle_behind(map<int, vector<Vehicle>> predictions, int lane, Vehicle ego, Vehicle & rVehicle) {
     /*
     Returns a true if a vehicle is found behind the current vehicle, false otherwise. The passed reference
     rVehicle is updated if a vehicle is found.
@@ -341,7 +357,7 @@ bool get_vehicle_behind(map<int, vector<Vehicle>> predictions, int lane, Vehicle
     for (map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); ++it) {
         
         temp_vehicle = it->second[it->second.size()-1];//otherwise take the last waypoint
-        double future_ego_s = fmod(position_at(HORIZON, &ego), MAX_S);
+        double future_ego_s = fmod(position_at(HORIZON, ego), MAX_S);
         if (temp_vehicle.l == lane && temp_vehicle.s < future_ego_s && temp_vehicle.s > max_s) {
             max_s = temp_vehicle.s;
             rVehicle = temp_vehicle;
@@ -351,7 +367,7 @@ bool get_vehicle_behind(map<int, vector<Vehicle>> predictions, int lane, Vehicle
     return found_vehicle;
 }
 
-bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle &ego, Vehicle & rVehicle) {
+bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle ego, Vehicle & rVehicle) {
     /*
     Returns a true if a vehicle is found ahead of the current vehicle, false otherwise. The passed reference
     rVehicle is updated if a vehicle is found.
@@ -362,7 +378,7 @@ bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle 
     for (map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); ++it) {
 
         temp_vehicle = it->second[it->second.size()-1];// take last waypoint
-        double future_ego_s = fmod(position_at(HORIZON, &ego), MAX_S);
+        double future_ego_s = fmod(position_at(HORIZON, ego), MAX_S);
         if (temp_vehicle.l == lane && temp_vehicle.s > future_ego_s && temp_vehicle.s < min_s) {
             min_s = temp_vehicle.s;
             rVehicle = temp_vehicle;
@@ -372,16 +388,16 @@ bool get_vehicle_ahead(map<int, vector<Vehicle>> predictions, int lane, Vehicle 
     return found_vehicle;
 }
 
-vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> predictions, int lane, Vehicle &ego) {
+vector<double> get_kinematics(map<int, vector<Vehicle>> predictions, int lane, Vehicle ego) {
 	/* 
   Gets next timestep kinematics (position, velocity, acceleration) 
   for a given lane. Tries to choose the maximum velocity and acceleration, 
   given other vehicle positions and accel/velocity constraints.
   */
 
-  double m_v = mph2mps(ego->v);//convert to m/s for easy calculation
-  double m_s = ego->s;
-  double m_a = ego->a;
+  double m_v = mph2mps(ego.v);//convert to m/s for easy calculation
+  double m_s = ego.s;
+  double m_a = ego.a;
 
   double max_velocity_accel_limit = m_v + MAX_ACC * 0.9 * HORIZON;//we plan trajectory for HORIZON also for HORIZON
   double new_position;
@@ -390,10 +406,10 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> predictions, in
   Vehicle vehicle_ahead;
   Vehicle vehicle_behind;
 
-  if (get_vehicle_ahead(predictions, lane, &ego, vehicle_ahead)) {
+  if (get_vehicle_ahead(predictions, lane, ego, vehicle_ahead)) {
       // cout<<"\nfind vehicle ahead!\n";
 
-      if (get_vehicle_behind(predictions, lane, &ego, vehicle_behind)) {
+      if (get_vehicle_behind(predictions, lane, ego, vehicle_behind)) {
           new_velocity = vehicle_ahead.v; //must travel at the speed of traffic, regardless of preferred buffer
       } else {
           double max_velocity_in_front = (vehicle_ahead.s - m_s - SAFE_DIST - CAR_L)/HORIZON + vehicle_ahead.v - HORIZON * m_a / 2.0;
@@ -411,76 +427,143 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> predictions, in
     
 }
 
-Vehicle Vehicle::keep_lane_trajectory(map<int, vector<Vehicle>> predictions, Vehicle &ego) {
+Vehicle keep_lane_trajectory(map<int, vector<Vehicle>> predictions, Vehicle ego) {
     /*
     Generate a keep lane trajectory.
     */
   
     Vehicle target;
 
-    vector<double> kinematics = get_kinematics(predictions, ego->l, &ego);
+    vector<double> kinematics = get_kinematics(predictions, ego.l, ego);
     float new_s = kinematics[0];
     float new_v = kinematics[1];
     float new_a = kinematics[2];
-    trajectory.push_back(Vehicle(this->lane, new_s, new_v, new_a, KL));
+    target = Vehicle(ego.id, ego.l, new_s, ego.d, new_v, new_a, KL);
     
     return target;
 }
 
+Vehicle prep_lane_change_trajectory(STATE state, map<int, vector<Vehicle>> predictions, Vehicle ego) {
 
-map<STATE, Vehicle> generate_target(vector<STATE> states, map<int ,vector<Vehicle>> predictions, Vehicle &ego)
+  /*
+  Generate a trajectory preparing for a lane change.
+  */
+  float new_s;
+  float new_v;
+  float new_a;
+  Vehicle vehicle_behind;
+  int new_lane = ego.l + LANE_DIRECTION[state];
+  Vehicle target;
+
+  vector<double> curr_lane_new_kinematics = get_kinematics(predictions, ego.l, ego);
+
+  if (get_vehicle_behind(predictions, ego.l, ego, vehicle_behind)) {
+      //Keep speed of current lane so as not to collide with car behind.
+      new_s = curr_lane_new_kinematics[0];
+      new_v = curr_lane_new_kinematics[1];
+      new_a = curr_lane_new_kinematics[2];
+      
+  } else {
+      vector<double> best_kinematics;
+      vector<double> next_lane_new_kinematics = get_kinematics(predictions, new_lane, ego);
+      //Choose kinematics with lowest velocity.
+      if (next_lane_new_kinematics[1] < curr_lane_new_kinematics[1]) {
+          best_kinematics = next_lane_new_kinematics;
+      } else {
+          best_kinematics = curr_lane_new_kinematics;
+      }
+      new_s = best_kinematics[0];
+      new_v = best_kinematics[1];
+      new_a = best_kinematics[2];
+  }
+
+  target = Vehicle(ego.id, ego.l, new_s, ego.d, new_v, new_a, state);
+  return target;
+}
+
+Vehicle lane_change_trajectory(STATE state, map<int, vector<Vehicle>> predictions, Vehicle ego) 
+{
+  /*
+  Generate a lane change trajectory.
+  */
+  int new_lane = ego.l + LANE_DIRECTION[state];
+  Vehicle target;
+  Vehicle next_lane_vehicle;
+  bool lane_changeable = false;
+  //Check if a lane change is possible (check if another vehicle occupies that spot).
+  for (map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); ++it) {
+      next_lane_vehicle = it->second[it->second.size() -1];
+      vector<double> kinematics;
+      double lc_dist = fabs(fmod(next_lane_vehicle.s, MAX_S) - fmod(ego.s + SAFE_DIST + CAR_L, MAX_S));
+      if ( lc_dist > 0 && next_lane_vehicle.l == new_lane) {
+        //If lane change is not possible, return empty trajectory.
+        return target;
+      }else
+      {
+          lane_changeable = true;
+          kinematics = get_kinematics(predictions, new_lane, ego);
+      }
+      target = Vehicle(ego.id, new_lane, kinematics[0], get_d(new_lane), kinematics[1], kinematics[2], state);
+  }
+  
+  return target;
+}
+
+
+map<STATE, Vehicle> generate_target(vector<STATE> states, map<int ,vector<Vehicle>> predictions, Vehicle ego)
 {
 	map<STATE, Vehicle> targets;	
 	//get possible target vehicle
 	for(int i=0; i<states.size(); i++)
 	{
 		STATE state = states[i];
-		STATE ego_state = ego->state;
 
 		Vehicle target;
-		switch(ego_state)
+		bool has_target = false;
+		switch(state)
 		{
 			case CS:
-							target = constant_trajectory(&ego);
+							target = constant_speed_trajectory(ego);
 							break;
 			case KL:
-							target = keep_lane_trajectory(map<int ,vector<Vehicle>> predictions, Vehicle &ego);
+							target = keep_lane_trajectory(predictions, ego);
 							break;
 			case PLCL:
-							//TODO
+							target = prep_lane_change_trajectory(PLCL, predictions, ego);
 								break;
 			case PLCR:
-								//TODO
+							target = prep_lane_change_trajectory(PLCR, predictions, ego);
 								break;
 			case LCL:
-								//TODO
+							target = lane_change_trajectory(LCL, predictions, ego);
 								break;
 			case LCR: 
-								//TODO
+								target = lane_change_trajectory(LCR, predictions, ego);
 								break;
 			default: cout<<"bad state";
 							 break;
-			if(! target)
+			if(target)
 			{
 				targets.insert(std::pair<state, target>);
 			}
 		}
 	}
+	return targets;
 }
 
 /*
 	get target vehicle at horizon from predicitons
 */
-Vehicle get_target_vehicle(map<int ,vector<Vehicle>> predictions, Vehicle &ego)
+Vehicle get_target_vehicle(map<int ,vector<Vehicle>> predictions, Vehicle ego)
 {
 	//check collision
 	if(! check_collision())
 	{
 		//get possible next state list
-		vector<STATE> states = successor_states(&ego);
+		vector<STATE> states = successor_states(ego);
 
 		//get possible target vechile
-		map<STATE, Vehicle> targets = generate_target(states, predictions, &ego);
+		map<STATE, Vehicle> targets = generate_target(states, predictions, ego);
 
 		//calculate cost for each state
 		//TODO
@@ -493,7 +576,7 @@ Vehicle get_target_vehicle(map<int ,vector<Vehicle>> predictions, Vehicle &ego)
 		//TODO 
 		//deal with collision
 		//keep lane if there is possible collision
-		Vehicle target = keep_lane_trajectory(map<int ,vector<Vehicle>> predictions, Vehicle &ego);
+		Vehicle target = keep_lane_trajectory(map<int ,vector<Vehicle>> predictions, Vehicle ego);
 		return target;
 	}
 	
