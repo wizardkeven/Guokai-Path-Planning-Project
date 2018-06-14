@@ -4,6 +4,7 @@
 #include <string>
 #include "constant.h"
 #include "vehicle.h"
+#include "cost.h"
 
 using namespace std;
 
@@ -32,6 +33,21 @@ string hasData(string s) {
 double distance(double x1, double y1, double x2, double y2)
 {
 	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
+}
+
+string enum2str(STATE state)
+{
+
+	switch(state)
+	{
+		case CS: return "CS";   // constant speed
+  	case KL: return "KL";   // keep lane
+  	case PLCL: return "PLCL"; //prepare lane change left
+  	case PLCR: return "PLCR"; //prepare lane change right
+  	case LCL: return "LCL";  //lane change left
+  	case LCR: return "LCR"; //Lane change right
+  	default: return "Unknown state!"; 
+	}
 }
 int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y)
 {
@@ -304,7 +320,7 @@ map<int, vector<Vehicle>> predict(map<int, Vehicle> vehicles, Vehicle ego)
 	return predictions;
 }
 
-vector<STATE> successor_states(Vehicle & ego) {
+vector<STATE> successor_states(Vehicle ego) {
     /*
     Provides the possible next states given the current state for the FSM 
     discussed in the course, with the exception that lane changes happen 
@@ -438,6 +454,7 @@ Vehicle keep_lane_trajectory(map<int, vector<Vehicle>> predictions, Vehicle ego)
     float new_s = kinematics[0];
     float new_v = kinematics[1];
     float new_a = kinematics[2];
+    cout<<"keep lane:\ts: "<<new_s<<"\tv: "<<new_v<<"\ta: "<<new_a<<endl;
     target = Vehicle(ego.id, ego.l, new_s, ego.d, new_v, new_a, KL);
     
     return target;
@@ -476,7 +493,7 @@ Vehicle prep_lane_change_trajectory(STATE state, map<int, vector<Vehicle>> predi
       new_v = best_kinematics[1];
       new_a = best_kinematics[2];
   }
-
+  cout<<"prepare lane change:\ts: "<<new_s<<"\tv: "<<new_v<<"\ta: "<<new_a<<"\tnew_lane: "<<new_lane<<endl;
   target = Vehicle(ego.id, ego.l, new_s, ego.d, new_v, new_a, state);
   return target;
 }
@@ -489,7 +506,7 @@ Vehicle lane_change_trajectory(STATE state, map<int, vector<Vehicle>> prediction
   int new_lane = ego.l + LANE_DIRECTION[state];
   Vehicle target;
   Vehicle next_lane_vehicle;
-  bool lane_changeable = false;
+  // bool lane_changeable = false;
   //Check if a lane change is possible (check if another vehicle occupies that spot).
   for (map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); ++it) {
       next_lane_vehicle = it->second[it->second.size() -1];
@@ -498,28 +515,32 @@ Vehicle lane_change_trajectory(STATE state, map<int, vector<Vehicle>> prediction
       if ( lc_dist > 0 && next_lane_vehicle.l == new_lane) {
         //If lane change is not possible, return empty trajectory.
         return target;
-      }else
-      {
-          lane_changeable = true;
-          kinematics = get_kinematics(predictions, new_lane, ego);
       }
-      target = Vehicle(ego.id, new_lane, kinematics[0], get_d(new_lane), kinematics[1], kinematics[2], state);
+      // else
+      // {
+      //     lane_changeable = true;
+      // }
   }
+	
+	vector<double> kinematics = get_kinematics(predictions, new_lane, ego);
+	cout<<"lane change:\ts: "<<kinematics[0]<<"\tv: "<<kinematics[1]<<"\ta: "<<kinematics[2]<<"\tnew_lane: "<<new_lane<<endl;
+	target = Vehicle(ego.id, new_lane, kinematics[0], get_d(new_lane), kinematics[1], kinematics[2], state);
   
   return target;
 }
 
 
-map<STATE, Vehicle> generate_target(vector<STATE> states, map<int ,vector<Vehicle>> predictions, Vehicle ego)
+vector<Vehicle> generate_target(STATE state, map<int ,vector<Vehicle>> predictions, Vehicle ego)
 {
-	map<STATE, Vehicle> targets;	
+	// map<STATE, Vehicle> targets;	
 	//get possible target vehicle
-	for(int i=0; i<states.size(); i++)
-	{
-		STATE state = states[i];
+	// for(int i=0; i<states.size(); i++)
+	// {
+		// STATE state = states[i];
 
+		vector<Vehicle> targets;
 		Vehicle target;
-		bool has_target = false;
+
 		switch(state)
 		{
 			case CS:
@@ -542,13 +563,20 @@ map<STATE, Vehicle> generate_target(vector<STATE> states, map<int ,vector<Vehicl
 								break;
 			default: cout<<"bad state";
 							 break;
-			if(target)
+			if(target.id > -1)
 			{
-				targets.insert(std::pair<state, target>);
+				targets.push_back(target);
 			}
 		}
-	}
+	// }
 	return targets;
+}
+
+//
+bool check_collision(map<int ,vector<Vehicle>> predictions, Vehicle ego)
+{
+	//TODO
+	return false;
 }
 
 /*
@@ -557,27 +585,47 @@ map<STATE, Vehicle> generate_target(vector<STATE> states, map<int ,vector<Vehicl
 Vehicle get_target_vehicle(map<int ,vector<Vehicle>> predictions, Vehicle ego)
 {
 	//check collision
-	if(! check_collision())
-	{
+	// if(! check_collision(predictions, ego))
+	// {
 		//get possible next state list
 		vector<STATE> states = successor_states(ego);
+		cout<<"states size: "<<states.size()<<"\n";
+		assert(states.size()>1);
 
 		//get possible target vechile
-		map<STATE, Vehicle> targets = generate_target(states, predictions, ego);
+		// map<STATE, Vehicle> targets = generate_target(states, predictions, ego);
 
 		//calculate cost for each state
-		//TODO
+		float cost;
+		vector<float> costs;
+    vector<string> final_states;
+    vector<Vehicle> final_trajectories;
+
+    for (vector<STATE>::iterator it = states.begin(); it != states.end(); ++it) {
+        vector<Vehicle> trajectory = generate_target(*it, predictions, ego);
+        assert(trajectory.size() != 0);
+        if (trajectory.size() != 0) {
+            cost = calculate_cost(ego, predictions, trajectory);
+            cout<<"cost for: "<<enum2str(*it)<<"\t: "<<cost<<"\n";
+            costs.push_back(cost);
+            final_trajectories.push_back(trajectory[0]);
+        }
+    }
+
+    vector<float>::iterator best_cost = min_element(begin(costs), end(costs));
+    int best_idx = distance(begin(costs), best_cost);
+    return final_trajectories[best_idx];
 
 		//choose best state	
-	}
-	else
-	{
-		//deal with collison
-		//TODO 
-		//deal with collision
-		//keep lane if there is possible collision
-		Vehicle target = keep_lane_trajectory(map<int ,vector<Vehicle>> predictions, Vehicle ego);
-		return target;
-	}
+	// }
+	// else
+	// {
+	// 	//deal with collison
+	// 	//TODO 
+	// 	//deal with collision
+	// 	//keep lane if there is possible collision
+	// 	Vehicle target = keep_lane_trajectory(predictions, ego);
+	// 	return target;
+	// }
 	
 }

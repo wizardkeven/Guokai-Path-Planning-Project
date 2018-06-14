@@ -15,6 +15,7 @@
 #include "helpers.h"
 #include "constant.h"
 #include "vehicle.h"
+#include "trajectory.h"
 
 using namespace std;
 
@@ -200,19 +201,30 @@ int main() {
               cout<<"id: "<<it->first<<"\tsize: "<< m_vehicles.size();
               for(int i=0; i< m_vehicles.size(); i++)
               {
-                cout<<"\ns ==> "<<m_vehicles[i].s<<"\tlane: "<<m_vehicles[i].lane<<"\nv: "<<m_vehicles[i].v;
+                cout<<"\ns ==> "<<m_vehicles[i].s<<"\tlane: "<<m_vehicles[i].l<<"\nv: "<<m_vehicles[i].v;
               }
               cout<<"\n\n";
             }
             //Generate trajectory based on predictions
-            Vehicle target = get_target_vehicle(predictions, &ego);
+            Vehicle target = get_target_vehicle(predictions, ego);
+
             // ego.realize_next_state(trajectory);
+            vector<vector<double>> previous_xy;
+            for(int i=0; i< previous_path_x.size(); i++)
+            {
+              double px = previous_path_x[i];
+              double py = previous_path_y[i];
+              previous_xy.push_back(vector<double>(px, py));
+            }
+            vector<double> delta{0,0,0,0,0,0};//offset which the ideal car should be between the surronding
+            Trajectory traj = Trajectory( ego,  target, delta, previous_xy);
 
+            // vector<vector<double>> new_traj = traj.generate_trajectory();
 
-            ref_vel = ego.v;
-            ref_a = ego.a;
+            // ref_vel = ego.v;
+            // ref_a = ego.a;
 
-            // if(too_close)
+            // ifose)(too_cl
             // {
             //   ref_vel -= .224;
             // }
@@ -262,34 +274,39 @@ int main() {
               
             }
 
-            double next_s = car_s;
-            double next_lane = ego.lane;
-            //get target point after horizon time period
-            for(int i = 0; i< trajectory.size(); i++)
-            {
-              vector<double> next_wp = trajectory[i];
-              assert(next_wp.size() == 2);
-              next_s = next_wp[0];
-              next_lane = next_wp[1];
-              vector<double> next_wp = getXY(next_s,(2 + 4 * next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y); 
+            double next_s = target.s;
+            double next_lane = target.l;
+            double next_d = target.d;
+            STATE next_state = target.state;
+            double next_v = target.v;
+            double next_a = target.a;
+            ref_vel = next_v;
+            ref_a = next_a;            //get target point after horizon time period
+            // for(int i = 0; i< trajectory.size(); i++)
+            // {
+              // vector<double> next_wp = //trajectory[i];
+              // assert(next_wp.size() == 2);
+              // next_s = next_wp[0];
+              // next_lane = next_wp[1];
+              vector<double> next_wp = getXY(next_s,next_d,map_waypoints_s,map_waypoints_x,map_waypoints_y); 
               ptsx.push_back(next_wp[0]);
               ptsy.push_back(next_wp[1]); 
-            }
+            // }
 
             //In Frenet add evenly 30m spaced points ahead of the starting reference
-            vector<double> next_wp0 = getXY(next_s+30,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
-            vector<double> next_wp1 = getXY(next_s+60,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            vector<double> next_wp0 = getXY(next_s+30,next_d,map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            // vector<double> next_wp1 = getXY(next_s+60,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
             // vector<double> next_wp2 = getXY(next_s+90,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
 
             ptsx.push_back(next_wp0[0]);
-            ptsx.push_back(next_wp1[0]);
+            // ptsx.push_back(next_wp1[0]);
             // ptsx.push_back(next_wp2[0]);
 
             ptsy.push_back(next_wp0[1]);
-            ptsy.push_back(next_wp1[1]);
+            // ptsy.push_back(next_wp1[1]);
             // ptsy.push_back(next_wp2[1]);
           
-
+            
             for(int i=0; i< ptsx.size(); i++)
             {
               //shift car reference angle to 0 degree
@@ -298,23 +315,24 @@ int main() {
 
               ptsx[i] = (shift_x * cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
               ptsy[i] = (shift_x * sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
+              
             }
 
             //create a spline
             tk::spline s;
 
-            // cout<<"\n\nDebug ptsx and ptsy!\n";
-            // cout<<"ptsx: "<<ptsx[0];
-            // for(int i=1; i< ptsx.size();i++)
-            // {
-            //   cout<<" , "<<ptsx[i];
-            // }
+            cout<<"\n\nDebug ptsx and ptsy!\n";
+            cout<<"ptsx: "<<ptsx[0];
+            for(int i=1; i< ptsx.size();i++)
+            {
+              cout<<" , "<<ptsx[i];
+            }
 
-            // cout<<"\nptsy: "<<ptsy[0];
-            // for(int i=1; i< ptsy.size();i++)
-            // {
-            //   cout<<" , "<<ptsy[i];
-            // }
+            cout<<"\nptsy: "<<ptsy[0];
+            for(int i=1; i< ptsy.size();i++)
+            {
+              cout<<" , "<<ptsy[i];
+            }
 
             //set (x,y) points to the spline
             s.set_points(ptsx,ptsy);

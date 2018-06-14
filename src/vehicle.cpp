@@ -2,7 +2,7 @@
 
 Vehicle::Vehicle()
 {
-		this->id = 0;
+		this->id = -1;
     this->l = 1;
     this->s = .0;
     this->d = .0;

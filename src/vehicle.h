@@ -1,6 +1,5 @@
 #ifndef VEHICLE_H
 #define VEHICLE_H
-
 #include "constant.h"
 
 class Vehicle {
@@ -13,7 +12,7 @@ public:
   double v; // car speed m/s
   double a; // car acceleration m/(s*s)
 
-  STATE state;
+  STATE state = KL;
 
     struct collider
     {
@@ -26,7 +25,7 @@ public:
   * Constructor
   */
   Vehicle();
-  Vehicle(int id, int l, double s, double d, double v, double a, STATE state = CS);
+  Vehicle(int id, int l, double s, double d, double v, double a, STATE state = KL);
 
   /**
   * Destructor
