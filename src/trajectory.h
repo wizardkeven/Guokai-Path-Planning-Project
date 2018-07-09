@@ -9,7 +9,6 @@
 #include "vehicle.h"
 #include "cost.h"
 
-using namespace std;
 
 class Trajectory{
 
@@ -26,19 +25,19 @@ public:
 	};
 
 	//existing cost functions
-	map<string(*)(), int> WEIGHTED_COST_FUNCTIONS;
+	std::map<string(*)(), int> WEIGHTED_COST_FUNCTIONS;
 
-	vector<traj_xy> traj;
+	std::vector<traj_xy> traj;
 	/**
   * Constructor
   */
-	Trajectory(Vehicle start_vehicle, Vehicle target_vehicle, vector<double> delta, vector<vector<double>> previous_xy);
+	Trajectory(Vehicle start_vehicle, Vehicle target_vehicle, std::vector<double> delta, std::vector<std::vector<double>> previous_xy);
 	/**
   * Destructor
   */
 	virtual ~Trajectory();
 
-	vector<vector<double>> generate_trajectory();
+	std::vector<std::vector<double>> generate_trajectory();
 
 };
 

@@ -15,6 +15,8 @@
 #include "helpers.h"
 #include "constant.h"
 #include "vehicle.h"
+#include "prediction.h"
+#include "target.h"
 #include "trajectory.h"
 
 using namespace std;
@@ -111,8 +113,8 @@ int main() {
               car_s = end_path_s;
             }
 
-            cout<<"\nVehicle starting position:\n";
-            cout<<"car_x: "<<car_x<<"\tcar_y: "<<car_y<<"\tcar_s: "<<car_s<<"\tcar_d: "<<car_d<<"\tcar_yaw: "<<car_yaw<<"\tcar_speed: "<<car_speed<<"\n";
+            // cout<<"\nVehicle starting position:\n";
+            // cout<<"car_x: "<<car_x<<"\tcar_y: "<<car_y<<"\tcar_s: "<<car_s<<"\tcar_d: "<<car_d<<"\tcar_yaw: "<<car_yaw<<"\tcar_speed: "<<car_speed<<"\n";
 
             // bool too_close = false;
 
@@ -122,9 +124,9 @@ int main() {
             ego.d = car_d;
             ego.v = mph2mps(car_speed);
 
-            //get vehicles from sensor fusion data within FOV
-            map<int, Vehicle> vehicles = get_vehicle_in_FOV(sensor_fusion,ego);
-
+            // //get vehicles from sensor fusion data within FOV
+            // map<int, Vehicle> vehicles = get_vehicle_in_FOV(sensor_fusion,ego);
+            Prediction prediction = Prediction(sensor_fusion,ego);
             //find ref_v to use
             //generate trajectory from sensor fusion data
             // cout<<"/ndebug sensor fusion data!\n\n";
@@ -184,7 +186,9 @@ int main() {
 
             //generate predictions
             //TODO
-            map<int ,vector<Vehicle> > predictions = predict(vehicles, ego);
+
+            map<int ,vector<Vehicle>> predictions;
+            prediction.predict(predictions);
 
             // map<int, Vehicle>::iterator it = vehicles.begin();
             // while(it != vehicles.end())
@@ -194,30 +198,33 @@ int main() {
             //     predictions[v_id] = preds;
             //     it++;
             // }
-            cout<<"\ndebug predictions!\n";
-            for(map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); it++)
-            {
-              vector<Vehicle> m_vehicles = it->second;
-              cout<<"id: "<<it->first<<"\tsize: "<< m_vehicles.size();
-              for(int i=0; i< m_vehicles.size(); i++)
-              {
-                cout<<"\ns ==> "<<m_vehicles[i].s<<"\tlane: "<<m_vehicles[i].l<<"\nv: "<<m_vehicles[i].v;
-              }
-              cout<<"\n\n";
-            }
+            // cout<<"\ndebug predictions!\n";
+            // for(map<int, vector<Vehicle>>::iterator it = predictions.begin(); it != predictions.end(); it++)
+            // {
+            //   vector<Vehicle> m_vehicles = it->second;
+            //   cout<<"id: "<<it->first<<"\tsize: "<< m_vehicles.size();
+            //   for(int i=0; i< m_vehicles.size(); i++)
+            //   {
+            //     cout<<"\ns ==> "<<m_vehicles[i].s<<"\tlane: "<<m_vehicles[i].l<<"\nv: "<<m_vehicles[i].v;
+            //   }
+            //   cout<<"\n\n";
+            // }
             //Generate trajectory based on predictions
-            Vehicle target = get_target_vehicle(predictions, ego);
+            Target get_target{predictions, ego};
+            Vehicle target;
+            get_target.get_target_vehicle(target);
+            cout<<"\ntarget para=> s: "<<target.s<<"\td: "<<target.d<<"\tv: "<<target.v<<"\ta: "<<target.a<<"\tlane: "<<target.l<<"\n";
 
             // ego.realize_next_state(trajectory);
-            vector<vector<double>> previous_xy;
-            for(int i=0; i< previous_path_x.size(); i++)
-            {
-              double px = previous_path_x[i];
-              double py = previous_path_y[i];
-              previous_xy.push_back(vector<double>(px, py));
-            }
-            vector<double> delta{0,0,0,0,0,0};//offset which the ideal car should be between the surronding
-            Trajectory traj = Trajectory( ego,  target, delta, previous_xy);
+            // vector<vector<double>> previous_xy;
+            // for(int i=0; i< previous_path_x.size(); i++)
+            // {
+            //   double px = previous_path_x[i];
+            //   double py = previous_path_y[i];
+            //   previous_xy.push_back(vector<double>(px, py));
+            // }
+            // vector<double> delta{0,0,0,0,0,0};//offset which the ideal car should be between the surronding
+            // Trajectory traj = Trajectory( ego,  target, delta, previous_xy);
 
             // vector<vector<double>> new_traj = traj.generate_trajectory();
 
@@ -249,10 +256,10 @@ int main() {
               double pre_car_y = car_y - sin(car_yaw);
 
               ptsx.push_back(pre_car_x);
-              // ptsx.push_back(car_x);
+              ptsx.push_back(car_x);
 
               ptsy.push_back(pre_car_y);
-              // ptsy.push_back(car_y);
+              ptsy.push_back(car_y);
             }//use previous path's end points as starting reference
             else
             {
@@ -267,10 +274,10 @@ int main() {
 
               //Use the two points that make the path tangent to the previous path's end point
               ptsx.push_back(ref_x_prev);
-              // ptsx.push_back(ref_x);
+              ptsx.push_back(ref_x);
 
               ptsy.push_back(ref_y_prev);
-              // ptsy.push_back(ref_y);
+              ptsy.push_back(ref_y);
               
             }
 
@@ -288,21 +295,22 @@ int main() {
               // assert(next_wp.size() == 2);
               // next_s = next_wp[0];
               // next_lane = next_wp[1];
-              vector<double> next_wp = getXY(next_s,next_d,map_waypoints_s,map_waypoints_x,map_waypoints_y); 
-              ptsx.push_back(next_wp[0]);
-              ptsy.push_back(next_wp[1]); 
+            vector<double> next_wp = getXY(next_s,next_d,map_waypoints_s,map_waypoints_x,map_waypoints_y); 
+            ptsx.push_back(next_wp[0]);
+            ptsy.push_back(next_wp[1]); 
+            cout<<"next_wp=> x: "<<next_wp[0]<<"\ty: "<<next_wp[1]<<"\n";
             // }
 
             //In Frenet add evenly 30m spaced points ahead of the starting reference
-            vector<double> next_wp0 = getXY(next_s+30,next_d,map_waypoints_s,map_waypoints_x,map_waypoints_y);
+            // vector<double> next_wp0 = getXY(next_s+30,next_d,map_waypoints_s,map_waypoints_x,map_waypoints_y);
             // vector<double> next_wp1 = getXY(next_s+60,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
             // vector<double> next_wp2 = getXY(next_s+90,(2+4*next_lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
 
-            ptsx.push_back(next_wp0[0]);
+            // ptsx.push_back(next_wp0[0]);
             // ptsx.push_back(next_wp1[0]);
             // ptsx.push_back(next_wp2[0]);
 
-            ptsy.push_back(next_wp0[1]);
+            // ptsy.push_back(next_wp0[1]);
             // ptsy.push_back(next_wp1[1]);
             // ptsy.push_back(next_wp2[1]);
           
@@ -317,22 +325,14 @@ int main() {
               ptsy[i] = (shift_x * sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
               
             }
-
+            cout<<"\nptsx size: "<<ptsx.size()<<"\tptsy size: "<<ptsy.size()<<"\n";
+            for(int i=0; i< ptsx.size(); i++)
+            {
+              cout<<"["<<i<<"]: "<<ptsx[i]<<" , "<<ptsy[i]<<"\n";
+            }
+            cout<<"\n";
             //create a spline
             tk::spline s;
-
-            cout<<"\n\nDebug ptsx and ptsy!\n";
-            cout<<"ptsx: "<<ptsx[0];
-            for(int i=1; i< ptsx.size();i++)
-            {
-              cout<<" , "<<ptsx[i];
-            }
-
-            cout<<"\nptsy: "<<ptsy[0];
-            for(int i=1; i< ptsy.size();i++)
-            {
-              cout<<" , "<<ptsy[i];
-            }
 
             //set (x,y) points to the spline
             s.set_points(ptsx,ptsy);
@@ -349,18 +349,22 @@ int main() {
             }
 
             //Calculate how to break up spline points so that we travel at our desired reference velocity
-            double target_x = 30.0;
+            double target_x = next_wp[0]-car_x;
+            // cout<<"\ntarget_x: "<<target_x<<"\n";
             double target_y = s(target_x);
+            // cout<<"\ntarget_y: "<<target_y<<"\n";
             double target_dist = sqrt(target_x*target_x + target_y*target_y);
 
             double x_add_on = 0.0;
 
             //fill up the rest of our path planner after filling in with previous points, here we will always output 50 points
+            cout<<"\nref_vel ==> "<<ref_vel<<"\n";
+
+            double N = (target_dist/(DT*ref_vel/2.24));
 
             for(int i=1; i<=50 - previous_path_x.size(); i++)
             {
 
-              double N = (target_dist/(.02*ref_vel/2.24));
               double x_point = x_add_on+(target_x)/N;
               double y_point = s(x_point);
 
